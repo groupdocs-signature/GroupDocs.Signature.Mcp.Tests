@@ -4,8 +4,7 @@ using Xunit.Abstractions;
 
 namespace GroupDocs.Signature.Mcp.IntegrationTests;
 
-[Collection(McpServerCollection.Name)]
-public class SearchQrCodesTests
+public class SearchQrCodesTests : IClassFixture<McpServerFixture>
 {
     private readonly McpServerFixture _fixture;
     private readonly ITestOutputHelper _output;

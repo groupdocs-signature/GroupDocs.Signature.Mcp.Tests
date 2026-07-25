@@ -102,6 +102,21 @@ jobs:
           echo "$GROUPDOCS_LICENSE" | base64 -d > "$RUNNER_TEMP/GroupDocs.lic"
           echo "GROUPDOCS_LICENSE_PATH=$RUNNER_TEMP/GroupDocs.lic" >> "$GITHUB_ENV"
 
+      # Diagnostics: launch the published server exactly like the test fixture does and
+      # surface its stderr. A healthy stdio server waits on stdin (timeout kills it at
+      # 90s -> exit 124); anything else exits early and prints WHY - which the fixture's
+      # 'server shut down unexpectedly' error hides.
+      - name: Probe dnx server launch (diagnostics)
+        shell: bash
+        run: |
+          set +e
+          timeout 90 dnx GroupDocs.Signature.Mcp@${MCP_PACKAGE_VERSION} --yes < /dev/null > dnx_probe_out.log 2> dnx_probe_err.log
+          code=$?
+          echo "probe exit=$code (124 = server stayed up waiting on stdin = healthy)"
+          echo "--- stderr ---"; cat dnx_probe_err.log
+          echo "--- stdout (head) ---"; head -5 dnx_probe_out.log
+          exit 0
+
       - name: Restore
         run: dotnet restore
 

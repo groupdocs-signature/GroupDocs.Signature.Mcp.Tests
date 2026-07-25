@@ -102,17 +102,23 @@ jobs:
           echo "$GROUPDOCS_LICENSE" | base64 -d > "$RUNNER_TEMP/GroupDocs.lic"
           echo "GROUPDOCS_LICENSE_PATH=$RUNNER_TEMP/GroupDocs.lic" >> "$GITHUB_ENV"
 
-      # Diagnostics: launch the published server exactly like the test fixture does and
-      # surface its stderr. A healthy stdio server waits on stdin (timeout kills it at
-      # 90s -> exit 124); anything else exits early and prints WHY - which the fixture's
-      # 'server shut down unexpectedly' error hides.
-      - name: Probe dnx server launch (diagnostics)
+      # Pre-warm the dnx package cache AND surface the server's launch stderr.
+      # Root-cause (2026-07-25): with a COLD dnx cache the fixture's in-pipe launch of
+      # this 161 MB package fails ConnectAsync in ~1.7s ('server shut down unexpectedly');
+      # after a warm-up the full suite passes 42/42. This step downloads/launches the
+      # server once (stdin=/dev/null -> reads EOF -> clean exit 0; 124 = killed by
+      # timeout = also healthy) and prints stderr, which the fixture error hides.
+      # NOTE: on Windows runners bash cannot exec 'dnx' (it is dnx.cmd) - exit 127 here
+      # means the probe itself failed to run, not a server problem.
+      - name: Pre-warm dnx package cache (+ launch diagnostics)
         shell: bash
         run: |
           set +e
-          timeout 90 dnx GroupDocs.Signature.Mcp@${MCP_PACKAGE_VERSION} --yes < /dev/null > dnx_probe_out.log 2> dnx_probe_err.log
+          DNX=dnx
+          [ "$RUNNER_OS" = "Windows" ] && DNX=dnx.cmd
+          timeout 180 "$DNX" GroupDocs.Signature.Mcp@${MCP_PACKAGE_VERSION} --yes < /dev/null > dnx_probe_out.log 2> dnx_probe_err.log
           code=$?
-          echo "probe exit=$code (124 = server stayed up waiting on stdin = healthy)"
+          echo "probe exit=$code (0 or 124 = healthy; 127 = dnx not found; else see stderr)"
           echo "--- stderr ---"; cat dnx_probe_err.log
           echo "--- stdout (head) ---"; head -5 dnx_probe_out.log
           exit 0
